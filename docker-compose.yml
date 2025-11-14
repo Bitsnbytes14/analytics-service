@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  mongo:
+    image: mongo:6
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  ingestion:
+    build: .
+    container_name: ingestion
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "3000:3000"
+    command: ["node", "ingestion.js"]
+    depends_on:
+      - redis
+
+  worker:
+    build: .
+    container_name: worker
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MONGO_URI=mongodb://mongo:27017/analytics
+    command: ["node", "worker.js"]
+    depends_on:
+      - redis
+      - mongo
+
+  reporting:
+    build: .
+    container_name: reporting
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/analytics
+    ports:
+      - "3001:3001"
+    command: ["node", "reporting.js"]
+    depends_on:
+      - mongo
+
+volumes:
+  mongo-data:
